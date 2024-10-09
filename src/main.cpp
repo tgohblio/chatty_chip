@@ -1,14 +1,17 @@
 #include "Arduino.h"
 #include "WiFi.h"
 #include "Audio.h"
+#include "ESP32Servo.h"
 #include "settings.h"
 
 // Digital I/O used
 #define I2S_DOUT      25  // DIN connection
 #define I2S_BCLK      27  // Bit clock
 #define I2S_LRC       26  // Left Right Clock
+#define SERVO_IN      13  // Servo pwm signal
 
 Audio audio;
+Servo servo;
 
 String ssid =     WIFI_SSID;
 String password = WIFI_PASSWORD;
@@ -17,14 +20,18 @@ String password = WIFI_PASSWORD;
 void setup()
 {
     Serial.begin(115200);
-    WiFi.disconnect();
-    WiFi.mode(WIFI_STA);
-    WiFi.begin(ssid.c_str(), password.c_str());
-    while (WiFi.status() != WL_CONNECTED) delay(1500);
+
+    servo.attach(SERVO_IN);
     audio.setPinout(I2S_BCLK, I2S_LRC, I2S_DOUT);
     audio.setVolume(15); // 0...21
 
-    audio.connecttohost("https://playerservices.streamtheworld.com/api/livestream-redirect/987FM.mp3");
+
+    // WiFi.disconnect();
+    // WiFi.mode(WIFI_STA);
+    // WiFi.begin(ssid.c_str(), password.c_str());
+    // while (WiFi.status() != WL_CONNECTED) delay(1500);
+
+    // audio.connecttohost("https://playerservices.streamtheworld.com/api/livestream-redirect/987FM.mp3");
 //    audio.connecttohost("http://www.wdr.de/wdrlive/media/einslive.m3u");
 //    audio.connecttohost("http://macslons-irish-pub-radio.com/media.asx");
 //    audio.connecttohost("http://mp3.ffh.de/radioffh/hqlivestream.aac"); //  128k aac
@@ -37,7 +44,19 @@ void setup()
 // put your main code here, to run repeatedly
 void loop()
 {
-    audio.loop();
+//    audio.loop();
+
+    for(int posDegrees = 0; posDegrees <= 180; posDegrees++) {
+        servo.write(posDegrees);
+        Serial.println(posDegrees);
+        delay(20);
+    }
+
+    for(int posDegrees = 180; posDegrees >= 0; posDegrees--) {
+        servo.write(posDegrees);
+        Serial.println(posDegrees);
+        delay(20);
+    }
 }
 
 // optional
