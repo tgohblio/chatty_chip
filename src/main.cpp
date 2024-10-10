@@ -2,7 +2,7 @@
 #include "WiFi.h"
 #include "Audio.h"
 #include "ESP32Servo.h"
-#include "settings.h"
+#include "wifi_settings.h"
 
 // Digital I/O used
 #define I2S_DOUT      25  // DIN connection
@@ -19,17 +19,24 @@ String password = WIFI_PASSWORD;
 // put your setup code here, to run once
 void setup()
 {
+    wl_status_t status = WL_DISCONNECTED;
+    
     Serial.begin(115200);
 
     servo.attach(SERVO_IN);
     audio.setPinout(I2S_BCLK, I2S_LRC, I2S_DOUT);
     audio.setVolume(15); // 0...21
 
-
-    // WiFi.disconnect();
-    // WiFi.mode(WIFI_STA);
-    // WiFi.begin(ssid.c_str(), password.c_str());
-    // while (WiFi.status() != WL_CONNECTED) delay(1500);
+    WiFi.disconnect();
+    WiFi.mode(WIFI_STA);
+    WiFi.begin(ssid.c_str(), password.c_str());
+    while (status != WL_CONNECTED)
+    {
+        status = WiFi.status();
+        printf("status code: %d\r\n", status);
+        delay(1500);
+    }
+    printf("Connected!\r\n");
 
     // audio.connecttohost("https://playerservices.streamtheworld.com/api/livestream-redirect/987FM.mp3");
 //    audio.connecttohost("http://www.wdr.de/wdrlive/media/einslive.m3u");
