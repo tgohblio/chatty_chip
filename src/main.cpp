@@ -10,7 +10,7 @@
 #define I2S_LRC       26  // Left Right Clock
 #define SERVO_IN      13  // Servo pwm signal
 
-Audio audio;
+Audio speaker;
 Servo servo;
 
 String ssid =     WIFI_SSID;
@@ -24,8 +24,8 @@ void setup()
     Serial.begin(115200);
 
     servo.attach(SERVO_IN);
-    audio.setPinout(I2S_BCLK, I2S_LRC, I2S_DOUT);
-    audio.setVolume(15); // 0...21
+    speaker.setPinout(I2S_BCLK, I2S_LRC, I2S_DOUT);
+    speaker.setVolume(15); // 0...21
 
     WiFi.disconnect();
     WiFi.mode(WIFI_STA);
@@ -38,32 +38,32 @@ void setup()
     }
     printf("Connected!\r\n");
 
-    // audio.connecttohost("https://playerservices.streamtheworld.com/api/livestream-redirect/987FM.mp3");
-//    audio.connecttohost("http://www.wdr.de/wdrlive/media/einslive.m3u");
-//    audio.connecttohost("http://macslons-irish-pub-radio.com/media.asx");
-//    audio.connecttohost("http://mp3.ffh.de/radioffh/hqlivestream.aac"); //  128k aac
-//     audio.connecttohost("http://mp3.ffh.de/radioffh/hqlivestream.mp3"); //  128k mp3
-    //   audio.connecttohost("http://vis.media-ice.musicradio.com/CapitalMP3"); //  128k mp3
-//    audio.connecttospeech("Wenn die Hunde schlafen, kann der Wolf gut Schafe stehlen.", "de");
-//    audio.connecttohost("http://media.ndr.de/download/podcasts/podcast4161/AU-20190404-0844-1700.mp3"); // podcast
+    speaker.connecttohost("https://playerservices.streamtheworld.com/api/livestream-redirect/987FM.mp3");
+//    speaker.connecttohost("http://www.wdr.de/wdrlive/media/einslive.m3u");
+//    speaker.connecttohost("http://macslons-irish-pub-radio.com/media.asx");
+//    speaker.connecttohost("http://mp3.ffh.de/radioffh/hqlivestream.aac"); //  128k aac
+//     speaker.connecttohost("http://mp3.ffh.de/radioffh/hqlivestream.mp3"); //  128k mp3
+    //   speaker.connecttohost("http://vis.media-ice.musicradio.com/CapitalMP3"); //  128k mp3
+//    speaker.connecttospeech("Wenn die Hunde schlafen, kann der Wolf gut Schafe stehlen.", "de");
+//    speaker.connecttohost("http://media.ndr.de/download/podcasts/podcast4161/AU-20190404-0844-1700.mp3"); // podcast
 }
 
 // put your main code here, to run repeatedly
 void loop()
 {
-//    audio.loop();
+    speaker.loop();
 
-    for(int posDegrees = 0; posDegrees <= 180; posDegrees++) {
-        servo.write(posDegrees);
-        Serial.println(posDegrees);
-        delay(20);
-    }
+    // for(int posDegrees = 0; posDegrees <= 180; posDegrees++) {
+    //     servo.write(posDegrees);
+    //     Serial.println(posDegrees);
+    //     delay(20);
+    // }
 
-    for(int posDegrees = 180; posDegrees >= 0; posDegrees--) {
-        servo.write(posDegrees);
-        Serial.println(posDegrees);
-        delay(20);
-    }
+    // for(int posDegrees = 180; posDegrees >= 0; posDegrees--) {
+    //     servo.write(posDegrees);
+    //     Serial.println(posDegrees);
+    //     delay(20);
+    // }
 }
 
 // optional
