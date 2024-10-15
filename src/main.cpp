@@ -45,54 +45,70 @@ const char *rootCA_ipify = \
 "-----END CERTIFICATE-----\n" \
 "";
 
-
-/*
-
-Expected output:
-================
-Starting connection to server...
-Connected to server!
-HTTP/1.1 200 OK
-Date: Tue, 15 Oct 2024 03:49:52 GMT
-Content-Type: text/plain
-Content-Length: 15
-Connection: close
-Vary: Origin
-CF-Cache-Status: DYNAMIC
-Server: cloudflare
-CF-RAY: 8d2cd7781f70a11f-SIN
-
-260.255.234.152
-*/
-bool getExternalIP( void )
+/**
+ * @brief Send HTTP GET request to the specified URL and host.
+ * 
+ * @param url The URL to send the request to.
+ * @param host The host name of the server.
+ * @param buffer A buffer to store the response in.
+ * @return String string payload if successful, else empty string 
+ */
+String sendHttpsGET(String url, String host)
 {
-    bool retVal = false;
-    String url = "https://api.ipify.org/";
-    String host = "api.ipify.org";
+    String retVal;
 
-    Serial.println("\nStarting connection to server...");
-    if(client.connect("api.ipify.org", 443))
+    if(client.connect(host.c_str(), 443))
     {
-        retVal = true;
-
-        Serial.println("Connected to server!");
-        // Make a HTTP request
+        Serial.println("Connected to " + host);
         client.print("GET " + url + " HTTP/1.1\r\n" + "Host: " + host + "\r\n" + "User-Agent: ESP32\r\n" + "Connection: close\r\n\r\n");
         while(client.connected())
         {
             String header = client.readStringUntil('\n');
             Serial.println(header);
             if (header == "\r")
-            {
                 break;
-            }
         }
-        String line = client.readStringUntil('\n');
-        Serial.println(line);
+        retVal = client.readStringUntil('\n');
     }
     else
     {
         Serial.println("Connection failed!");
+    }
+    return retVal;
+}
+
+/** 
+* @brief Send API to obtain external IP address for the board.
+* 
+* Sample output:
+* =============
+* Starting connection to server...
+* Connected to server!
+* HTTP/1.1 200 OK
+* Date: Tue, 15 Oct 2024 03:49:52 GMT
+* Content-Type: text/plain
+* Content-Length: 15
+* Connection: close
+* Vary: Origin
+* CF-Cache-Status: DYNAMIC
+* Server: cloudflare
+* CF-RAY: 8d2cd7781f70a11f-SIN
+* 
+* 260.255.234.152
+*/
+bool getExternalIP( void )
+{
+    bool retVal = false;
+
+    // Set CA cert for this specific host
+    client.setCACert(rootCA_ipify);
+
+    Serial.println("\nStarting connection to server...");
+    String result = sendHttpsGET("https://api.ipify.org/", "api.ipify.org");
+    if(result != "")
+    {
+        retVal = true;
+        Serial.println(result);
     }
     return retVal;
 }
@@ -118,10 +134,8 @@ void setup()
         status = WiFi.status();
         delay(1000);
     }
-    Serial.printf("connected");
+    Serial.println(" connected");
 
-    client.setCACert(rootCA_ipify);
-    // test code for HTTPS connection and GET
     getExternalIP();
 }
 
