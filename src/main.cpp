@@ -77,7 +77,7 @@ bool getExternalIP( void )
 
         Serial.println("Connected to server!");
         // Make a HTTP request
-        client.print(("GET ") + url + " HTTP/1.1\r\n" + "Host: " + host + "\r\n" + "User-Agent: ESP32\r\n" + "Connection: close\r\n\r\n");
+        client.print("GET " + url + " HTTP/1.1\r\n" + "Host: " + host + "\r\n" + "User-Agent: ESP32\r\n" + "Connection: close\r\n\r\n");
         while(client.connected())
         {
             String header = client.readStringUntil('\n');
