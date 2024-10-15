@@ -1,7 +1,7 @@
 #include "Arduino.h"
 #include "ArduinoJson.h"
 #include "WiFi.h"
-#include "WiFiClientSecure.h"
+#include "HTTPClient.h"
 #include "Audio.h"
 #include "ESP32Servo.h"
 #include "wifi_settings.h"
@@ -18,7 +18,7 @@
 
 Audio speaker;
 Servo servo;
-WiFiClientSecure client;
+HTTPClient https;
 
 String ssid =     WIFI_SSID;
 String password = WIFI_PASSWORD;
@@ -76,62 +76,6 @@ const char *rootCA_ipify = \
 "-----END CERTIFICATE-----\n" \
 "";
 
-/**
- * @brief Send HTTP GET request to the specified URL and host.
- * 
- * @param url The URL to send the request to.
- * @param host The host name of the server.
- * @param buffer A buffer to store the response in.
- * @return String string payload if successful, else empty string 
- */
-String sendHttpsGET(String url, String host)
-{
-    String retVal;
-
-    // Write to transmit buffer
-    client.print("GET " + url + " HTTP/1.1\r\n" + "Host: " + host + "\r\n" + "User-Agent: ESP32\r\n" + "Connection: close\r\n\r\n");
-    while(client.connected())
-    {
-        String header = client.readStringUntil('\n');
-        Serial.println(header);
-        if (header == "\r")
-            break;
-    }
-    retVal = client.readStringUntil('\n');
-
-    return retVal;
-}
-
-// TODO: add timeout
-String sendHttpsGETWithParams(String url, String host, String params)
-{
-    JsonDocument response;
-    String result;
-    String request = "GET " + url + "/" + params + " HTTP/1.1\r\n" + "Host: " + host + "\r\n" + "User-Agent: ESP32\r\n\r\n";
-
-    Serial.println("Connected to " + host);
-    client.print(request);
-
-    while(client.connected())
-    {
-        DeserializationError error = deserializeJson(response, client);
-
-        if(response["status"] == "running") // from GET /api/heartbeat
-        {
-            Serial.println("Host is alive.");
-            result = "{\"status\": \"running\"}";
-            break;
-        }
-        else if(response["status"] == "latest") // from GET /api/audio/latest
-        {
-            String fileName = response["file"];
-            result = fileName;
-            break;
-        }
-    }
-    return result;
-}
-
 /** 
 * @brief Send API to obtain external IP address.
 * 
@@ -154,33 +98,36 @@ String sendHttpsGETWithParams(String url, String host, String params)
 bool getExternalIP( void )
 {
     bool retVal = false;
-    String host = "api.ipify.org";
-    String url = "https://api.ipify.org/";
-
-    // Set CA cert for this specific host
-    client.setCACert(rootCA_ipify);
 
     Serial.print("\nStarting connection to server...");
-    if(client.connect(host.c_str(), 443))
+    if (https.begin("https://api.ipify.org/", rootCA_ipify))
     {
-        Serial.printf("\r\nConnected to %s\r\n", host.c_str());
-        // Write to transmit buffer
-        client.print("GET " + url + " HTTP/1.1\r\n" + "Host: " + host + "\r\n" + "User-Agent: ESP32\r\n" + "Connection: close\r\n\r\n");
-        String result = sendHttpsGET(url, host);
-        if(result != "")
+        retVal = true;
+        Serial.println(" connected.");
+        // start connection and send HTTP header
+        int httpCode = https.GET();
+        // httpCode will be negative on error
+        if (httpCode > 0)
         {
-            retVal = true;
-            Serial.println(result);
+            Serial.printf("[HTTPS] GET... code: %d\n", httpCode);
+            // HTTP header has been send and Server response header has been handled
+            if (httpCode == HTTP_CODE_OK || httpCode == HTTP_CODE_MOVED_PERMANENTLY)
+            {
+                // print server response payload
+                String payload = https.getString();
+                Serial.println(payload);
+            }
         }
+        else 
+        {
+            Serial.printf("[HTTPS] GET... failed, error: %s\n", https.errorToString(httpCode).c_str());
+        }
+        https.end();
     }
     else
     {
         Serial.println(" failed!");
     }
-    // stop and disconnect from host
-    Serial.println("Connection closed.");
-    client.stop();
-
     return retVal;
 }
 
@@ -207,27 +154,68 @@ void setup()
     }
     Serial.println(" connected");
 
-    getExternalIP();
+    // getExternalIP();
 
-    client.setCACert(rootCA_onrender);
-    Serial.printf("Connecting to %s...", SERVER_HOST);
-    if(client.connect(SERVER_HOST, 443))
-    {
-        Serial.printf(" connected.\r\n");
-    }
+    Serial.printf("\nStarting connection to %s...", SERVER_URL);
+
+    String url = "https://rag-chatbot-ddfu.onrender.com/api/heartbeat";
+    if(https.begin(url, rootCA_onrender))
+        Serial.println(" connected.");
     else
-    {
-        Serial.println("Connection failed! Closing.");
-        client.stop();
-    }
+        Serial.println(" failed!");
 }
+
+String prevFile = "";
+String mp3File = "";
+int errorCode = 0;
+JsonDocument resp;
+bool isOK = false;
 
 // put your main code here, to run repeatedly
 void loop()
 {
-    if(client.connected())
-    {
-        sendHttpsGETWithParams(SERVER_URL, SERVER_HOST, "api/heartbeat");
+        // Poll for new mp3 files
+        errorCode = https.GET();
+        if(errorCode == HTTP_CODE_OK)
+        {
+            String payload = https.getString();
+            deserializeJson(resp, payload);
+            if(resp["status"] == "running")
+                Serial.println("[HTTPS] GET api/heartbeat 200 OK");
+        }
+        else
+        {
+            Serial.printf("[HTTPS] GET... failed, error: %s\n", https.errorToString(errorCode).c_str());
+        }
+#if 0
+        errorCode = https.sendRequest("GET", "api/audio/latest");
+        if(errorCode == HTTP_CODE_OK)
+        {
+            String payload = https.getString();
+            deserializeJson(resp, payload);
+            if( (payload.isEmpty() == false) && (resp["file"] != "") )
+            {
+                mp3File = (const char*)(resp["file"]);
+                Serial.printf("\nnew file: %s", mp3File.c_str());
+            }
+            isOK = true;
+        }
+        else
+        {
+            Serial.printf("[HTTPS] GET... failed, error: %s\n", https.errorToString(errorCode).c_str());
+            isOK = false;
+        }
+
+        if(isOK)
+        {
+            String mp3URL = "api/stream/" + mp3File;
+            speaker.connecttohost(mp3URL.c_str());
+            if(errorCode == HTTP_CODE_OK)
+            {
+                prevFile = mp3File;
+            }
+            isOK = false;
+        }
+#endif
         delay(1000);
-    }
 }
