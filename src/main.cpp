@@ -74,6 +74,10 @@ String sendHttpsGET(String url, String host)
     {
         Serial.println("Connection failed!");
     }
+    // stop and disconnect from host
+    Serial.println("Connection closed.");
+    client.stop();
+
     return retVal;
 }
 
