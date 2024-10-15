@@ -1,5 +1,6 @@
 #include "Arduino.h"
 #include "WiFi.h"
+#include "WiFiClientSecure.h"
 #include "Audio.h"
 #include "ESP32Servo.h"
 #include "wifi_settings.h"
@@ -12,9 +13,89 @@
 
 Audio speaker;
 Servo servo;
+WiFiClientSecure client;
 
 String ssid =     WIFI_SSID;
 String password = WIFI_PASSWORD;
+
+// certificate for https://api.ipify.org
+// GlobalSign Root CA, valid until Fri Jan 28 2028, size: 1265 bytes
+// generated from https://projects.petrucci.ch/esp32/
+const char *rootCA_ipify = \
+"-----BEGIN CERTIFICATE-----\n" \
+"MIIDejCCAmKgAwIBAgIQf+UwvzMTQ77dghYQST2KGzANBgkqhkiG9w0BAQsFADBX\n" \
+"MQswCQYDVQQGEwJCRTEZMBcGA1UEChMQR2xvYmFsU2lnbiBudi1zYTEQMA4GA1UE\n" \
+"CxMHUm9vdCBDQTEbMBkGA1UEAxMSR2xvYmFsU2lnbiBSb290IENBMB4XDTIzMTEx\n" \
+"NTAzNDMyMVoXDTI4MDEyODAwMDA0MlowRzELMAkGA1UEBhMCVVMxIjAgBgNVBAoT\n" \
+"GUdvb2dsZSBUcnVzdCBTZXJ2aWNlcyBMTEMxFDASBgNVBAMTC0dUUyBSb290IFI0\n" \
+"MHYwEAYHKoZIzj0CAQYFK4EEACIDYgAE83Rzp2iLYK5DuDXFgTB7S0md+8Fhzube\n" \
+"Rr1r1WEYNa5A3XP3iZEwWus87oV8okB2O6nGuEfYKueSkWpz6bFyOZ8pn6KY019e\n" \
+"WIZlD6GEZQbR3IvJx3PIjGov5cSr0R2Ko4H/MIH8MA4GA1UdDwEB/wQEAwIBhjAd\n" \
+"BgNVHSUEFjAUBggrBgEFBQcDAQYIKwYBBQUHAwIwDwYDVR0TAQH/BAUwAwEB/zAd\n" \
+"BgNVHQ4EFgQUgEzW63T/STaj1dj8tT7FavCUHYwwHwYDVR0jBBgwFoAUYHtmGkUN\n" \
+"l8qJUC99BM00qP/8/UswNgYIKwYBBQUHAQEEKjAoMCYGCCsGAQUFBzAChhpodHRw\n" \
+"Oi8vaS5wa2kuZ29vZy9nc3IxLmNydDAtBgNVHR8EJjAkMCKgIKAehhxodHRwOi8v\n" \
+"Yy5wa2kuZ29vZy9yL2dzcjEuY3JsMBMGA1UdIAQMMAowCAYGZ4EMAQIBMA0GCSqG\n" \
+"SIb3DQEBCwUAA4IBAQAYQrsPBtYDh5bjP2OBDwmkoWhIDDkic574y04tfzHpn+cJ\n" \
+"odI2D4SseesQ6bDrarZ7C30ddLibZatoKiws3UL9xnELz4ct92vID24FfVbiI1hY\n" \
+"+SW6FoVHkNeWIP0GCbaM4C6uVdF5dTUsMVs/ZbzNnIdCp5Gxmx5ejvEau8otR/Cs\n" \
+"kGN+hr/W5GvT1tMBjgWKZ1i4//emhA1JG1BbPzoLJQvyEotc03lXjTaCzv8mEbep\n" \
+"8RqZ7a2CPsgRbuvTPBwcOMBBmuFeU88+FSBX6+7iP0il8b4Z0QFqIwwMHfs/L6K1\n" \
+"vepuoxtGzi4CZ68zJpiq1UvSqTbFJjtbD4seiMHl\n" \
+"-----END CERTIFICATE-----\n" \
+"";
+
+
+/*
+
+Expected output:
+================
+Starting connection to server...
+Connected to server!
+HTTP/1.1 200 OK
+Date: Tue, 15 Oct 2024 03:49:52 GMT
+Content-Type: text/plain
+Content-Length: 15
+Connection: close
+Vary: Origin
+CF-Cache-Status: DYNAMIC
+Server: cloudflare
+CF-RAY: 8d2cd7781f70a11f-SIN
+
+260.255.234.152
+*/
+bool getExternalIP( void )
+{
+    bool retVal = false;
+    String url = "https://api.ipify.org/";
+    String host = "api.ipify.org";
+
+    Serial.println("\nStarting connection to server...");
+    if(client.connect("api.ipify.org", 443))
+    {
+        retVal = true;
+
+        Serial.println("Connected to server!");
+        // Make a HTTP request
+        client.print(("GET ") + url + " HTTP/1.1\r\n" + "Host: " + host + "\r\n" + "User-Agent: ESP32\r\n" + "Connection: close\r\n\r\n");
+        while(client.connected())
+        {
+            String header = client.readStringUntil('\n');
+            Serial.println(header);
+            if (header == "\r")
+            {
+                break;
+            }
+        }
+        String line = client.readStringUntil('\n');
+        Serial.println(line);
+    }
+    else
+    {
+        Serial.println("Connection failed!");
+    }
+    return retVal;
+}
 
 // put your setup code here, to run once
 void setup()
@@ -30,73 +111,22 @@ void setup()
     WiFi.disconnect();
     WiFi.mode(WIFI_STA);
     WiFi.begin(ssid.c_str(), password.c_str());
-    while (status != WL_CONNECTED)
+    Serial.printf("Connecting to SSID %s", ssid);
+    while(status != WL_CONNECTED)
     {
+        Serial.printf(".");
         status = WiFi.status();
-        printf("status code: %d\r\n", status);
-        delay(1500);
+        delay(1000);
     }
-    printf("Connected!\r\n");
+    Serial.printf("connected");
 
-    speaker.connecttohost("https://playerservices.streamtheworld.com/api/livestream-redirect/987FM.mp3");
-//    speaker.connecttohost("http://www.wdr.de/wdrlive/media/einslive.m3u");
-//    speaker.connecttohost("http://macslons-irish-pub-radio.com/media.asx");
-//    speaker.connecttohost("http://mp3.ffh.de/radioffh/hqlivestream.aac"); //  128k aac
-//     speaker.connecttohost("http://mp3.ffh.de/radioffh/hqlivestream.mp3"); //  128k mp3
-    //   speaker.connecttohost("http://vis.media-ice.musicradio.com/CapitalMP3"); //  128k mp3
-//    speaker.connecttospeech("Wenn die Hunde schlafen, kann der Wolf gut Schafe stehlen.", "de");
-//    speaker.connecttohost("http://media.ndr.de/download/podcasts/podcast4161/AU-20190404-0844-1700.mp3"); // podcast
+    client.setCACert(rootCA_ipify);
+    // test code for HTTPS connection and GET
+    getExternalIP();
 }
 
 // put your main code here, to run repeatedly
 void loop()
 {
-    speaker.loop();
 
-    // for(int posDegrees = 0; posDegrees <= 180; posDegrees++) {
-    //     servo.write(posDegrees);
-    //     Serial.println(posDegrees);
-    //     delay(20);
-    // }
-
-    // for(int posDegrees = 180; posDegrees >= 0; posDegrees--) {
-    //     servo.write(posDegrees);
-    //     Serial.println(posDegrees);
-    //     delay(20);
-    // }
-}
-
-// optional
-void audio_info(const char *info){
-    Serial.print("info        "); Serial.println(info);
-}
-void audio_id3data(const char *info){  //id3 metadata
-    Serial.print("id3data     ");Serial.println(info);
-}
-void audio_eof_mp3(const char *info){  //end of file
-    Serial.print("eof_mp3     ");Serial.println(info);
-}
-void audio_showstation(const char *info){
-    Serial.print("station     ");Serial.println(info);
-}
-void audio_showstreaminfo(const char *info){
-    Serial.print("streaminfo  ");Serial.println(info);
-}
-void audio_showstreamtitle(const char *info){
-    Serial.print("streamtitle ");Serial.println(info);
-}
-void audio_bitrate(const char *info){
-    Serial.print("bitrate     ");Serial.println(info);
-}
-void audio_commercial(const char *info){  //duration in sec
-    Serial.print("commercial  ");Serial.println(info);
-}
-void audio_icyurl(const char *info){  //homepage
-    Serial.print("icyurl      ");Serial.println(info);
-}
-void audio_lasthost(const char *info){  //stream URL played
-    Serial.print("lasthost    ");Serial.println(info);
-}
-void audio_eof_speech(const char *info){
-    Serial.print("eof_speech  ");Serial.println(info);
 }
