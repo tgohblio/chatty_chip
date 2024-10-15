@@ -1,4 +1,5 @@
 #include "Arduino.h"
+#include "ArduinoJson.h"
 #include "WiFi.h"
 #include "WiFiClientSecure.h"
 #include "Audio.h"
@@ -11,12 +12,42 @@
 #define I2S_LRC       26  // Left Right Clock
 #define SERVO_IN      13  // Servo pwm signal
 
+// REST API
+#define SERVER_URL     "https://rag-chatbot-ddfu.onrender.com"
+#define SERVER_HOST    "rag-chatbot-ddfu.onrender.com"
+
 Audio speaker;
 Servo servo;
 WiFiClientSecure client;
 
 String ssid =     WIFI_SSID;
 String password = WIFI_PASSWORD;
+
+// certificate for https://rag-chatbot-ddfu.onrender.com
+// GlobalSign Root CA, valid until Fri Jan 28 2028, size: 1265 bytes 
+// generated from https://projects.petrucci.ch/esp32/
+const char* rootCA_onrender = \
+"-----BEGIN CERTIFICATE-----\n" \
+"MIIDejCCAmKgAwIBAgIQf+UwvzMTQ77dghYQST2KGzANBgkqhkiG9w0BAQsFADBX\n" \
+"MQswCQYDVQQGEwJCRTEZMBcGA1UEChMQR2xvYmFsU2lnbiBudi1zYTEQMA4GA1UE\n" \
+"CxMHUm9vdCBDQTEbMBkGA1UEAxMSR2xvYmFsU2lnbiBSb290IENBMB4XDTIzMTEx\n" \
+"NTAzNDMyMVoXDTI4MDEyODAwMDA0MlowRzELMAkGA1UEBhMCVVMxIjAgBgNVBAoT\n" \
+"GUdvb2dsZSBUcnVzdCBTZXJ2aWNlcyBMTEMxFDASBgNVBAMTC0dUUyBSb290IFI0\n" \
+"MHYwEAYHKoZIzj0CAQYFK4EEACIDYgAE83Rzp2iLYK5DuDXFgTB7S0md+8Fhzube\n" \
+"Rr1r1WEYNa5A3XP3iZEwWus87oV8okB2O6nGuEfYKueSkWpz6bFyOZ8pn6KY019e\n" \
+"WIZlD6GEZQbR3IvJx3PIjGov5cSr0R2Ko4H/MIH8MA4GA1UdDwEB/wQEAwIBhjAd\n" \
+"BgNVHSUEFjAUBggrBgEFBQcDAQYIKwYBBQUHAwIwDwYDVR0TAQH/BAUwAwEB/zAd\n" \
+"BgNVHQ4EFgQUgEzW63T/STaj1dj8tT7FavCUHYwwHwYDVR0jBBgwFoAUYHtmGkUN\n" \
+"l8qJUC99BM00qP/8/UswNgYIKwYBBQUHAQEEKjAoMCYGCCsGAQUFBzAChhpodHRw\n" \
+"Oi8vaS5wa2kuZ29vZy9nc3IxLmNydDAtBgNVHR8EJjAkMCKgIKAehhxodHRwOi8v\n" \
+"Yy5wa2kuZ29vZy9yL2dzcjEuY3JsMBMGA1UdIAQMMAowCAYGZ4EMAQIBMA0GCSqG\n" \
+"SIb3DQEBCwUAA4IBAQAYQrsPBtYDh5bjP2OBDwmkoWhIDDkic574y04tfzHpn+cJ\n" \
+"odI2D4SseesQ6bDrarZ7C30ddLibZatoKiws3UL9xnELz4ct92vID24FfVbiI1hY\n" \
+"+SW6FoVHkNeWIP0GCbaM4C6uVdF5dTUsMVs/ZbzNnIdCp5Gxmx5ejvEau8otR/Cs\n" \
+"kGN+hr/W5GvT1tMBjgWKZ1i4//emhA1JG1BbPzoLJQvyEotc03lXjTaCzv8mEbep\n" \
+"8RqZ7a2CPsgRbuvTPBwcOMBBmuFeU88+FSBX6+7iP0il8b4Z0QFqIwwMHfs/L6K1\n" \
+"vepuoxtGzi4CZ68zJpiq1UvSqTbFJjtbD4seiMHl\n" \
+"-----END CERTIFICATE-----\n";
 
 // certificate for https://api.ipify.org
 // GlobalSign Root CA, valid until Fri Jan 28 2028, size: 1265 bytes
@@ -57,32 +88,52 @@ String sendHttpsGET(String url, String host)
 {
     String retVal;
 
-    if(client.connect(host.c_str(), 443))
+    // Write to transmit buffer
+    client.print("GET " + url + " HTTP/1.1\r\n" + "Host: " + host + "\r\n" + "User-Agent: ESP32\r\n" + "Connection: close\r\n\r\n");
+    while(client.connected())
     {
-        Serial.println("Connected to " + host);
-        client.print("GET " + url + " HTTP/1.1\r\n" + "Host: " + host + "\r\n" + "User-Agent: ESP32\r\n" + "Connection: close\r\n\r\n");
-        while(client.connected())
-        {
-            String header = client.readStringUntil('\n');
-            Serial.println(header);
-            if (header == "\r")
-                break;
-        }
-        retVal = client.readStringUntil('\n');
+        String header = client.readStringUntil('\n');
+        Serial.println(header);
+        if (header == "\r")
+            break;
     }
-    else
-    {
-        Serial.println("Connection failed!");
-    }
-    // stop and disconnect from host
-    Serial.println("Connection closed.");
-    client.stop();
+    retVal = client.readStringUntil('\n');
 
     return retVal;
 }
 
+// TODO: add timeout
+String sendHttpsGETWithParams(String url, String host, String params)
+{
+    JsonDocument response;
+    String result;
+    String request = "GET " + url + "/" + params + " HTTP/1.1\r\n" + "Host: " + host + "\r\n" + "User-Agent: ESP32\r\n\r\n";
+
+    Serial.println("Connected to " + host);
+    client.print(request);
+
+    while(client.connected())
+    {
+        DeserializationError error = deserializeJson(response, client);
+
+        if(response["status"] == "running") // from GET /api/heartbeat
+        {
+            Serial.println("Host is alive.");
+            result = "{\"status\": \"running\"}";
+            break;
+        }
+        else if(response["status"] == "latest") // from GET /api/audio/latest
+        {
+            String fileName = response["file"];
+            result = fileName;
+            break;
+        }
+    }
+    return result;
+}
+
 /** 
-* @brief Send API to obtain external IP address for the board.
+* @brief Send API to obtain external IP address.
 * 
 * Sample output:
 * =============
@@ -103,17 +154,33 @@ String sendHttpsGET(String url, String host)
 bool getExternalIP( void )
 {
     bool retVal = false;
+    String host = "api.ipify.org";
+    String url = "https://api.ipify.org/";
 
     // Set CA cert for this specific host
     client.setCACert(rootCA_ipify);
 
-    Serial.println("\nStarting connection to server...");
-    String result = sendHttpsGET("https://api.ipify.org/", "api.ipify.org");
-    if(result != "")
+    Serial.print("\nStarting connection to server...");
+    if(client.connect(host.c_str(), 443))
     {
-        retVal = true;
-        Serial.println(result);
+        Serial.printf("\r\nConnected to %s\r\n", host.c_str());
+        // Write to transmit buffer
+        client.print("GET " + url + " HTTP/1.1\r\n" + "Host: " + host + "\r\n" + "User-Agent: ESP32\r\n" + "Connection: close\r\n\r\n");
+        String result = sendHttpsGET(url, host);
+        if(result != "")
+        {
+            retVal = true;
+            Serial.println(result);
+        }
     }
+    else
+    {
+        Serial.println(" failed!");
+    }
+    // stop and disconnect from host
+    Serial.println("Connection closed.");
+    client.stop();
+
     return retVal;
 }
 
@@ -141,10 +208,26 @@ void setup()
     Serial.println(" connected");
 
     getExternalIP();
+
+    client.setCACert(rootCA_onrender);
+    Serial.printf("Connecting to %s...", SERVER_HOST);
+    if(client.connect(SERVER_HOST, 443))
+    {
+        Serial.printf(" connected.\r\n");
+    }
+    else
+    {
+        Serial.println("Connection failed! Closing.");
+        client.stop();
+    }
 }
 
 // put your main code here, to run repeatedly
 void loop()
 {
-
+    if(client.connected())
+    {
+        sendHttpsGETWithParams(SERVER_URL, SERVER_HOST, "api/heartbeat");
+        delay(1000);
+    }
 }
