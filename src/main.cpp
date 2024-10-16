@@ -220,7 +220,7 @@ bool sendGETLatestAudioResponse( void )
 }
 
 // put your setup code here, to run once
-void setup()
+void setup( void )
 {
     wl_status_t status = WL_DISCONNECTED;
     
@@ -247,10 +247,8 @@ void setup()
     // speaker.connecttohost("https://playerservices.streamtheworld.com/api/livestream-redirect/987FM.mp3");
 }
 
-
-
 // put your main code here, to run repeatedly
-void loop()
+void loop( void )
 {
     switch(appState)
     {
@@ -330,4 +328,3 @@ void audio_icyurl(const char *info){  //homepage
 void audio_lasthost(const char *info){  //stream URL played
     Serial.print("lasthost    ");Serial.println(info);
 }
-
