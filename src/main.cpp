@@ -16,6 +16,14 @@
 #define SERVER_URL     "https://rag-chatbot-ddfu.onrender.com"
 #define SERVER_HOST    "rag-chatbot-ddfu.onrender.com"
 
+typedef enum app_state {
+    APP_IDLE,
+    APP_GET_HEARTBEAT,
+    APP_GET_LATEST_AUDIO_RESPONSE,
+    APP_PLAY_FILE,
+    APP_ERROR
+} state_t;
+
 // Globals
 Audio speaker;
 Servo servo;
@@ -27,8 +35,8 @@ String prevFile = "";
 String mp3File = "";
 int errorCode = 0;
 JsonDocument resp;
-bool isNew = false;
-bool isPlay = false;
+state_t appState = APP_IDLE;
+
 
 // certificate for https://rag-chatbot-ddfu.onrender.com
 // GlobalSign Root CA, valid until Fri Jan 28 2028, size: 1265 bytes 
@@ -138,8 +146,9 @@ bool getExternalIP( void )
     return retVal;
 }
 
-void sendGETHealth( void )
+bool sendGETHealth( void )
 {
+    bool retVal = false;
     String api = String("/api/heartbeat");
     String url = String(SERVER_URL) + api;
 
@@ -152,7 +161,10 @@ void sendGETHealth( void )
             String payload = https.getString();
             deserializeJson(resp, payload);
             if(resp["status"] == "running")
+            {
                 Serial.println("200 OK");
+                retVal = true;
+            }
         }
         else
         {
@@ -164,6 +176,7 @@ void sendGETHealth( void )
     {
         Serial.println("failed!");
     }
+    return retVal;
 }
 
 bool sendGETLatestAudioResponse( void )
@@ -230,7 +243,7 @@ void setup()
     Serial.println(" connected");
 
     getExternalIP();
-
+    appState = APP_GET_HEARTBEAT;
     // speaker.connecttohost("https://playerservices.streamtheworld.com/api/livestream-redirect/987FM.mp3");
 }
 
@@ -239,39 +252,53 @@ void setup()
 // put your main code here, to run repeatedly
 void loop()
 {
-        // // Poll for new mp3 files
-        // sendGETHealth();
-#if 1
-    if(!isPlay)
+    switch(appState)
     {
-        isNew = sendGETLatestAudioResponse();
-
-        if(isNew)
+        case APP_GET_HEARTBEAT:
         {
-            String mp3URL = String(SERVER_URL) + String("/api/stream/") + mp3File;
-            Serial.printf("Streaming from %s ...", mp3URL.c_str());
-            speaker.connecttohost(mp3URL.c_str());
-            isPlay = true;
-            isNew = false;
+            if(sendGETHealth())
+                appState = APP_GET_LATEST_AUDIO_RESPONSE;
+            else
+                delay(1000);
         }
-        delay(1000);
+        break;
+        case APP_GET_LATEST_AUDIO_RESPONSE:
+        {
+            if(sendGETLatestAudioResponse())
+            {
+                String mp3URL = String(SERVER_URL) + String("/api/stream/") + mp3File;
+                Serial.printf("Streaming from %s ...", mp3URL.c_str());
+                speaker.connecttohost(mp3URL.c_str());
+                appState = APP_PLAY_FILE;
+            }
+            else
+            {
+                delay(1000);
+            }
+        }
+        break;
+        case APP_PLAY_FILE:
+        {
+            speaker.loop();
+            // stays in this state until file is played to the end
+        }
+        break;
+        default:
+        {
+            // do nothing
+        }
+        break;
     }
-    else
-    {
-        speaker.loop();
-    }
-#else
-        speaker.loop();
-#endif
 }
 
 void audio_id3data(const char *info){  //id3 metadata
     Serial.print("id3data     ");Serial.println(info);
 }
 
+// if end of file detected, trigger to poll for next audio file
 void audio_eof_stream(const char *info){
     Serial.print("eof_stream  ");Serial.println(info);
-    isPlay = false;  // trigger to poll for next audio file
+    appState = APP_GET_LATEST_AUDIO_RESPONSE;
 }
 
 void audio_eof_mp3(const char *info){  //end of file
