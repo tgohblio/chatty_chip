@@ -16,12 +16,19 @@
 #define SERVER_URL     "https://rag-chatbot-ddfu.onrender.com"
 #define SERVER_HOST    "rag-chatbot-ddfu.onrender.com"
 
+// Globals
 Audio speaker;
 Servo servo;
 HTTPClient https;
 
 String ssid =     WIFI_SSID;
 String password = WIFI_PASSWORD;
+String prevFile = "";
+String mp3File = "";
+int errorCode = 0;
+JsonDocument resp;
+bool isNew = false;
+bool isPlay = false;
 
 // certificate for https://rag-chatbot-ddfu.onrender.com
 // GlobalSign Root CA, valid until Fri Jan 28 2028, size: 1265 bytes 
@@ -131,6 +138,74 @@ bool getExternalIP( void )
     return retVal;
 }
 
+void sendGETHealth( void )
+{
+    String api = String("/api/heartbeat");
+    String url = String(SERVER_URL) + api;
+
+    Serial.printf("\n[HTTPS] GET %s... ", api.c_str());
+    if(https.begin(url, rootCA_onrender))
+    {
+        int httpCode = https.GET();
+        if(httpCode == HTTP_CODE_OK)
+        {
+            String payload = https.getString();
+            deserializeJson(resp, payload);
+            if(resp["status"] == "running")
+                Serial.println("200 OK");
+        }
+        else
+        {
+            Serial.printf("failed, error: %s\n", https.errorToString(httpCode).c_str());
+        }
+        https.end();
+    }
+    else
+    {
+        Serial.println("failed!");
+    }
+}
+
+bool sendGETLatestAudioResponse( void )
+{
+    bool retVal= false;
+    String api = String("/api/audio/latest");
+    String url = String(SERVER_URL) + api;
+
+    Serial.printf("\n[HTTPS] GET %s... ", api.c_str());
+    if(https.begin(url, rootCA_onrender))
+    {
+        int httpCode = https.GET();
+        if(httpCode == HTTP_CODE_OK)
+        {
+            Serial.println("200 OK");
+            String payload = https.getString();
+            deserializeJson(resp, payload);
+            if( (payload.isEmpty() == false) && (resp["file"] != "") )
+            {
+                mp3File = String((const char *)(resp["file"]));
+
+                if(mp3File != prevFile)
+                {
+                    Serial.printf("\nnew file: %s\r\n", mp3File.c_str());
+                    prevFile = mp3File;
+                    retVal = true;
+                }
+            }
+        }
+        else
+        {
+            Serial.printf("failed, error: %s\n", https.errorToString(httpCode).c_str());
+        }
+        https.end();
+    }
+    else
+    {
+        Serial.println("failed!");
+    }
+    return retVal;
+}
+
 // put your setup code here, to run once
 void setup()
 {
@@ -154,68 +229,78 @@ void setup()
     }
     Serial.println(" connected");
 
-    // getExternalIP();
+    getExternalIP();
 
-    Serial.printf("\nStarting connection to %s...", SERVER_URL);
-
-    String url = "https://rag-chatbot-ddfu.onrender.com/api/heartbeat";
-    if(https.begin(url, rootCA_onrender))
-        Serial.println(" connected.");
-    else
-        Serial.println(" failed!");
+    // speaker.connecttohost("https://playerservices.streamtheworld.com/api/livestream-redirect/987FM.mp3");
 }
 
-String prevFile = "";
-String mp3File = "";
-int errorCode = 0;
-JsonDocument resp;
-bool isOK = false;
+
 
 // put your main code here, to run repeatedly
 void loop()
 {
-        // Poll for new mp3 files
-        errorCode = https.GET();
-        if(errorCode == HTTP_CODE_OK)
-        {
-            String payload = https.getString();
-            deserializeJson(resp, payload);
-            if(resp["status"] == "running")
-                Serial.println("[HTTPS] GET api/heartbeat 200 OK");
-        }
-        else
-        {
-            Serial.printf("[HTTPS] GET... failed, error: %s\n", https.errorToString(errorCode).c_str());
-        }
-#if 0
-        errorCode = https.sendRequest("GET", "api/audio/latest");
-        if(errorCode == HTTP_CODE_OK)
-        {
-            String payload = https.getString();
-            deserializeJson(resp, payload);
-            if( (payload.isEmpty() == false) && (resp["file"] != "") )
-            {
-                mp3File = (const char*)(resp["file"]);
-                Serial.printf("\nnew file: %s", mp3File.c_str());
-            }
-            isOK = true;
-        }
-        else
-        {
-            Serial.printf("[HTTPS] GET... failed, error: %s\n", https.errorToString(errorCode).c_str());
-            isOK = false;
-        }
+        // // Poll for new mp3 files
+        // sendGETHealth();
+#if 1
+    if(!isPlay)
+    {
+        isNew = sendGETLatestAudioResponse();
 
-        if(isOK)
+        if(isNew)
         {
-            String mp3URL = "api/stream/" + mp3File;
+            String mp3URL = String(SERVER_URL) + String("/api/stream/") + mp3File;
+            Serial.printf("Streaming from %s ...", mp3URL.c_str());
             speaker.connecttohost(mp3URL.c_str());
-            if(errorCode == HTTP_CODE_OK)
-            {
-                prevFile = mp3File;
-            }
-            isOK = false;
+            isPlay = true;
+            isNew = false;
         }
-#endif
         delay(1000);
+    }
+    else
+    {
+        speaker.loop();
+    }
+#else
+        speaker.loop();
+#endif
 }
+
+void audio_id3data(const char *info){  //id3 metadata
+    Serial.print("id3data     ");Serial.println(info);
+}
+
+void audio_eof_stream(const char *info){
+    Serial.print("eof_stream  ");Serial.println(info);
+    isPlay = false;  // trigger to poll for next audio file
+}
+
+void audio_eof_mp3(const char *info){  //end of file
+    Serial.print("eof_mp3     ");Serial.println(info);
+}
+
+void audio_eof_speech(const char *info){
+    Serial.print("eof_speech  ");Serial.println(info);
+}
+
+void audio_showstation(const char *info){
+    Serial.print("station     ");Serial.println(info);
+}
+void audio_showstreaminfo(const char *info){
+    Serial.print("streaminfo  ");Serial.println(info);
+}
+void audio_showstreamtitle(const char *info){
+    Serial.print("streamtitle ");Serial.println(info);
+}
+void audio_bitrate(const char *info){
+    Serial.print("bitrate     ");Serial.println(info);
+}
+void audio_commercial(const char *info){  //duration in sec
+    Serial.print("commercial  ");Serial.println(info);
+}
+void audio_icyurl(const char *info){  //homepage
+    Serial.print("icyurl      ");Serial.println(info);
+}
+void audio_lasthost(const char *info){  //stream URL played
+    Serial.print("lasthost    ");Serial.println(info);
+}
+
