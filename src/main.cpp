@@ -7,14 +7,20 @@
 #include "wifi_settings.h"
 
 // Digital I/O used
-#define I2S_DOUT      25  // DIN connection
-#define I2S_BCLK      27  // Bit clock
-#define I2S_LRC       26  // Left Right Clock
-#define SERVO_IN      13  // Servo pwm signal
+#define I2S_DOUT      GPIO_NUM_11  // DIN connection
+#define I2S_BCLK      GPIO_NUM_10  // Bit clock
+#define I2S_LRC       GPIO_NUM_9   // Left Right Clock
+#define SERVO_IN      GPIO_NUM_12  // Servo pwm signal
 
 // REST API
 #define SERVER_URL     "https://rag-chatbot-ddfu.onrender.com"
 #define SERVER_HOST    "rag-chatbot-ddfu.onrender.com"
+
+// SERVO 
+#define TIMER_RELOAD_MS     20 // Reduced timer interval for smoother movement
+#define MAX_ANGLE_DEGREES   90
+#define DURATION_MS         1000  // Duration to move from 0 to 90 degrees
+#define SERVO_STEP_SIZE     (MAX_ANGLE_DEGREES / (DURATION_MS / TIMER_RELOAD_MS))
 
 typedef enum app_state {
     APP_IDLE,
@@ -37,6 +43,9 @@ int errorCode = 0;
 JsonDocument resp;
 state_t appState = APP_IDLE;
 
+bool isServoActive = false;
+TimerHandle_t reloadTimer;
+void reloadTimerCallback(TimerHandle_t xTimer);
 
 // certificate for https://rag-chatbot-ddfu.onrender.com
 // GlobalSign Root CA, valid until Fri Jan 28 2028, size: 1265 bytes 
@@ -219,6 +228,26 @@ bool sendGETLatestAudioResponse( void )
     return retVal;
 }
 
+void reloadTimerCallback(TimerHandle_t xTimer)
+{
+    static int pos = 0;
+    static bool increasing = true;
+
+    servo.write(pos);
+
+    if (increasing) {
+        pos += SERVO_STEP_SIZE;
+        if (pos >= MAX_ANGLE_DEGREES) {
+            increasing = false;
+        }
+    } else {
+        pos -= SERVO_STEP_SIZE;
+        if (pos <= 0) {
+            increasing = true;
+        }
+    }
+}
+
 // put your setup code here, to run once
 void setup( void )
 {
@@ -227,6 +256,8 @@ void setup( void )
     Serial.begin(115200);
 
     servo.attach(SERVO_IN);
+    servo.write(0);
+
     speaker.setPinout(I2S_BCLK, I2S_LRC, I2S_DOUT);
     speaker.setVolume(15); // 0...21
 
@@ -243,8 +274,11 @@ void setup( void )
     Serial.println(" connected");
 
     getExternalIP();
+    reloadTimer = xTimerCreate("ReloadTimer", pdMS_TO_TICKS(TIMER_RELOAD_MS), true, 0, reloadTimerCallback);
+
+    if( reloadTimer == NULL )
+        Serial.println("Error! One shot timer returns NULL");
     appState = APP_GET_HEARTBEAT;
-    // speaker.connecttohost("https://playerservices.streamtheworld.com/api/livestream-redirect/987FM.mp3");
 }
 
 // put your main code here, to run repeatedly
@@ -277,8 +311,15 @@ void loop( void )
         break;
         case APP_PLAY_FILE:
         {
-            speaker.loop();
+            if (!isServoActive)
+            {
+                isServoActive = true;
+                xTimerStart(reloadTimer, 0);
+                Serial.println("Servo activated");
+            }
             // stays in this state until file is played to the end
+            speaker.loop();
+
         }
         break;
         default:
@@ -296,6 +337,9 @@ void audio_id3data(const char *info){  //id3 metadata
 // if end of file detected, trigger to poll for next audio file
 void audio_eof_stream(const char *info){
     Serial.print("eof_stream  ");Serial.println(info);
+    isServoActive = false;
+    servo.write(0); // Optionally reset the servo to 0 degrees
+    xTimerStop(reloadTimer, 0);
     appState = APP_GET_LATEST_AUDIO_RESPONSE;
 }
 
