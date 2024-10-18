@@ -16,11 +16,24 @@
 #define SERVER_URL     "https://rag-chatbot-ddfu.onrender.com"
 #define SERVER_HOST    "rag-chatbot-ddfu.onrender.com"
 
-// SERVO 
+#define NO_SMOOTHING
+
+// SERVO
+#ifdef NO_SMOOTHING
+
+#define TIMER_RELOAD_MS     250
+#define START_ANGLE_DEGREES 0
+#define MAX_ANGLE_DEGREES   45   // 120
+
+#else
+
 #define TIMER_RELOAD_MS     20 // Reduced timer interval for smoother movement
-#define MAX_ANGLE_DEGREES   90
+#define START_ANGLE_DEGREES 10
+#define MAX_ANGLE_DEGREES   70
 #define DURATION_MS         1000  // Duration to move from 0 to 90 degrees
 #define SERVO_STEP_SIZE     (MAX_ANGLE_DEGREES / (DURATION_MS / TIMER_RELOAD_MS))
+
+#endif
 
 typedef enum app_state {
     APP_IDLE,
@@ -230,10 +243,22 @@ bool sendGETLatestAudioResponse( void )
 
 void reloadTimerCallback(TimerHandle_t xTimer)
 {
-    static int pos = 0;
+    static int pos = START_ANGLE_DEGREES;
     static bool increasing = true;
 
     servo.write(pos);
+
+#ifdef NO_SMOOTHING
+
+    if (increasing) {
+        pos = MAX_ANGLE_DEGREES;
+        increasing = false;
+    } else {
+        pos = START_ANGLE_DEGREES;
+        increasing = true;
+    }
+
+#else
 
     if (increasing) {
         pos += SERVO_STEP_SIZE;
@@ -242,10 +267,12 @@ void reloadTimerCallback(TimerHandle_t xTimer)
         }
     } else {
         pos -= SERVO_STEP_SIZE;
-        if (pos <= 0) {
+        if (pos <= START_ANGLE_DEGREES) {
             increasing = true;
         }
     }
+
+#endif
 }
 
 // put your setup code here, to run once
@@ -256,7 +283,7 @@ void setup( void )
     Serial.begin(115200);
 
     servo.attach(SERVO_IN);
-    servo.write(0);
+    servo.write(START_ANGLE_DEGREES);
 
     speaker.setPinout(I2S_BCLK, I2S_LRC, I2S_DOUT);
     speaker.setVolume(15); // 0...21
@@ -330,45 +357,11 @@ void loop( void )
     }
 }
 
-void audio_id3data(const char *info){  //id3 metadata
-    Serial.print("id3data     ");Serial.println(info);
-}
-
 // if end of file detected, trigger to poll for next audio file
 void audio_eof_stream(const char *info){
     Serial.print("eof_stream  ");Serial.println(info);
     isServoActive = false;
-    servo.write(0); // Optionally reset the servo to 0 degrees
+    servo.write(START_ANGLE_DEGREES); // Optionally reset the servo to 0 degrees
     xTimerStop(reloadTimer, 0);
     appState = APP_GET_LATEST_AUDIO_RESPONSE;
-}
-
-void audio_eof_mp3(const char *info){  //end of file
-    Serial.print("eof_mp3     ");Serial.println(info);
-}
-
-void audio_eof_speech(const char *info){
-    Serial.print("eof_speech  ");Serial.println(info);
-}
-
-void audio_showstation(const char *info){
-    Serial.print("station     ");Serial.println(info);
-}
-void audio_showstreaminfo(const char *info){
-    Serial.print("streaminfo  ");Serial.println(info);
-}
-void audio_showstreamtitle(const char *info){
-    Serial.print("streamtitle ");Serial.println(info);
-}
-void audio_bitrate(const char *info){
-    Serial.print("bitrate     ");Serial.println(info);
-}
-void audio_commercial(const char *info){  //duration in sec
-    Serial.print("commercial  ");Serial.println(info);
-}
-void audio_icyurl(const char *info){  //homepage
-    Serial.print("icyurl      ");Serial.println(info);
-}
-void audio_lasthost(const char *info){  //stream URL played
-    Serial.print("lasthost    ");Serial.println(info);
 }
