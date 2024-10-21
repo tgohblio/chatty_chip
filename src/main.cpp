@@ -4,6 +4,7 @@
 #include "HTTPClient.h"
 #include "Audio.h"
 #include "ESP32Servo.h"
+#include "FastLED.h"
 #include "wifi_settings.h"
 
 // Digital I/O used
@@ -13,8 +14,13 @@
 #define SERVO_IN      GPIO_NUM_12  // Servo pwm signal
 
 // REST API
-#define SERVER_URL          "https://rag-chatbot-nvm4.onrender.com"
+#define SERVER_URL      "https://rag-chatbot-nvm4.onrender.com"
 #define NO_SMOOTHING
+
+// RGB led
+#define NUM_LEDS        1
+#define DATA_PIN        GPIO_NUM_48
+#define COLOR_ORDER     GRB
 
 // SERVO
 #ifdef NO_SMOOTHING
@@ -53,6 +59,7 @@ String mp3File = "";
 int errorCode = 0;
 JsonDocument resp;
 state_t appState = APP_IDLE;
+CRGB leds[NUM_LEDS];
 
 bool isServoActive = false;
 TimerHandle_t reloadTimer;
@@ -279,6 +286,13 @@ void setup( void )
     wl_status_t status = WL_DISCONNECTED;
     
     Serial.begin(115200);
+    setCpuFrequencyMhz(80); // 80 MHz
+    Serial.printf("CPU MAX_FREQ = %d\n", getCpuFrequencyMhz());
+
+	FastLED.addLeds<WS2812B, DATA_PIN, COLOR_ORDER>(leds, NUM_LEDS); 
+	FastLED.setBrightness(10);
+    leds[0] = CRGB::Red;
+    FastLED.show();
 
     servo.attach(SERVO_IN);
     servo.write(START_ANGLE_DEGREES);
@@ -314,7 +328,11 @@ void loop( void )
         case APP_GET_HEARTBEAT:
         {
             if(sendGETHealth())
+            {
+                leds[0] = CRGB::Green;  // COnnected to chatbot server
+                FastLED.show();
                 appState = APP_GET_LATEST_AUDIO_RESPONSE;
+            }
             else
                 delay(1000);
         }
