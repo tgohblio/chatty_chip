@@ -287,7 +287,7 @@ void setup( void )
     
     Serial.begin(115200);
     setCpuFrequencyMhz(80); // 80 MHz
-    Serial.printf("CPU MAX_FREQ = %d\n", getCpuFrequencyMhz());
+    Serial.printf("CPU MAX_FREQ = %d MHz\n", getCpuFrequencyMhz());
 
 	FastLED.addLeds<WS2812B, DATA_PIN, COLOR_ORDER>(leds, NUM_LEDS); 
 	FastLED.setBrightness(10);
