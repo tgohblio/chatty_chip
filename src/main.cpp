@@ -348,7 +348,12 @@ void loop( void )
             }
             else
             {
-                delay(1000);
+                leds[0] = CRGB::Black;
+                FastLED.show();
+                delay(500);
+                leds[0] = CRGB::Green;
+                FastLED.show();
+                delay(500);
             }
         }
         break;
