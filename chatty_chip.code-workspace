@@ -4,8 +4,8 @@
 			"path": "."
 		},
 		{
-			"name": "esp32_test",
-			"path": "../esp32_test"
+			"name": "ESP32 Arduino Framework",
+			"path": "../../.platformio/packages/framework-arduinoespressif32/cores/esp32"
 		}
 	],
 	"settings": {}
