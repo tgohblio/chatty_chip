@@ -13,9 +13,7 @@
 #define SERVO_IN      GPIO_NUM_12  // Servo pwm signal
 
 // REST API
-#define SERVER_URL     "https://rag-chatbot-ddfu.onrender.com"
-#define SERVER_HOST    "rag-chatbot-ddfu.onrender.com"
-
+#define SERVER_URL          "https://rag-chatbot-nvm4.onrender.com"
 #define NO_SMOOTHING
 
 // SERVO
@@ -60,10 +58,10 @@ bool isServoActive = false;
 TimerHandle_t reloadTimer;
 void reloadTimerCallback(TimerHandle_t xTimer);
 
-// certificate for https://rag-chatbot-ddfu.onrender.com
-// GlobalSign Root CA, valid until Fri Jan 28 2028, size: 1265 bytes 
+// certificate for https://rag-chatbot-nvm4.onrender.com
+// GlobalSign Root CA, valid until Fri Jan 28 2028, size: 1265 bytes
 // generated from https://projects.petrucci.ch/esp32/
-const char* rootCA_onrender = \
+const char* rootCA_chatBotServer = \
 "-----BEGIN CERTIFICATE-----\n" \
 "MIIDejCCAmKgAwIBAgIQf+UwvzMTQ77dghYQST2KGzANBgkqhkiG9w0BAQsFADBX\n" \
 "MQswCQYDVQQGEwJCRTEZMBcGA1UEChMQR2xvYmFsU2lnbiBudi1zYTEQMA4GA1UE\n" \
@@ -175,7 +173,7 @@ bool sendGETHealth( void )
     String url = String(SERVER_URL) + api;
 
     Serial.printf("\n[HTTPS] GET %s... ", api.c_str());
-    if(https.begin(url, rootCA_onrender))
+    if(https.begin(url, rootCA_chatBotServer))
     {
         int httpCode = https.GET();
         if(httpCode == HTTP_CODE_OK)
@@ -208,7 +206,7 @@ bool sendGETLatestAudioResponse( void )
     String url = String(SERVER_URL) + api;
 
     Serial.printf("\n[HTTPS] GET %s... ", api.c_str());
-    if(https.begin(url, rootCA_onrender))
+    if(https.begin(url, rootCA_chatBotServer))
     {
         int httpCode = https.GET();
         if(httpCode == HTTP_CODE_OK)
