@@ -4,13 +4,13 @@
 #define INSTANT
 
 // Digital I/O used
-#define SERVO_IN      13  // Servo pwm signal
+#define SERVO_IN            GPIO_NUM_12  // Servo pwm signal
 
 // SERVO 
 #ifdef INSTANT
 #define TIMER_RELOAD_MS     250  // Reduced timer interval for smoother movement
 #define START_ANGLE_DEGREES 0
-#define MAX_ANGLE_DEGREES   45 //120
+#define MAX_ANGLE_DEGREES   20   //
 #else
 #define TIMER_RELOAD_MS     10 // Reduced timer interval for smoother movement
 #define START_ANGLE_DEGREES 45

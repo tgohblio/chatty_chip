@@ -27,7 +27,7 @@
 
 #define TIMER_RELOAD_MS     250
 #define START_ANGLE_DEGREES 0
-#define MAX_ANGLE_DEGREES   45   // 120
+#define MAX_ANGLE_DEGREES   20   // calibrate to your needs
 
 #else
 
